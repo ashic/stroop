@@ -1,0 +1,140 @@
+---
+title: "Stroop Effect"
+author: "Ashic Mahtab"
+date: "Thursday, July 23, 2015"
+output: html_document
+---
+
+This is a statistical analysis of data gathered from an experiment in the Stroop Effect. Participants were shown two list of words, one congruent - where the words were in the colour they represented, and on incongruent - where the words were in a different colour to what they represented. Participants were timed on the time it took them to read each list. This timing info is our data set, and is available at [https://drive.google.com/file/d/0B9Yf01UaIbUgQXpYb2NhZ29yX1U/view?usp=sharing](https://drive.google.com/file/d/0B9Yf01UaIbUgQXpYb2NhZ29yX1U/view?usp=sharing). 
+
+In this analysis, we will be looking to see if there are any significant differences in time taken to read the congruent and incongruent lists.
+
+# The Dataset and Variables
+
+We start off by loading the dataset:
+
+```{r}
+data = read.csv('stroopdata.csv')
+head(data)
+```
+
+The dataset has two variables: the condition in which the participant reads the list, and the time taken for them to read it. The condition is a categorical variable with two levels - congruent and incongruent. The time is measured in seconds. Time is the dependent variable, while condition is the independent variable.
+
+# Hypothesis
+
+I am interested to see if there is any significant differences in time taken to read the two lists. Our null hypothesis is that there is no difference; the participants take the same amount of time to read through the list regardless of whether the list is congruent or congruent. Our alternative hypothesis is that there is a significant difference. 
+
+Our dataset consists of paired data from each participant. And looking at the dimensions of the dataset:
+
+```{r}
+dim(data)
+```
+
+we see that there are only `r dim(data)[1]` rows. The number of rows being less than 30, we cannot assume a normal distribution, or use normal approximation. We have to resort to using a t distribution. As we are interested in the differences in the two conditions for each paired data, we need a dependent t-test for paired data. 
+
+At this point, we will create a new dependent variable - Difference - representing the difference of each pair.
+
+```{r}
+data$Difference <- data$Congruent - data$Incongruent
+head(data)
+```
+
+With this in place, our null hypothesis is effectively that the Difference is 0, and the alternative hypothesis is that it is not.
+
+# Eploratory Analysis
+
+
+```{r}
+str(data)
+```
+
+We can see that the dataset has 24 datapoimts, and the Difference column represents how much longer it took each individual to read the congruent list than the incongruent one. The mean, sample standard deviation and standard error of the differences is given below:
+
+```{r}
+m <- mean(data$Difference)
+m
+s <- sd(data$Difference)
+s
+n <- nrow(data)
+se <- s / sqrt(n)
+se
+```
+
+We can also see the minimum and maximum difference:
+
+```{r}
+c(min(data$Difference), max(data$Difference))
+```
+
+Let's look at a histogram of buckets for the time difference, where each bucket is 5 seconds:
+
+```{r}
+library(ggplot2)
+qplot(data$Difference, binwidth=5, xlab="Difference(s)", ylab="Count", fill=I('green'), col=I('black'), alpha=I(.4)) + theme_bw()
+```
+
+We can see that the differences resemble a unimodal normal distribution with a left skew. As the skewness is not extreme, a t-test is applicable. We also notice that all of the differences are negative, with the majority of differences being less than 10 seconds in value.
+
+
+We can also look at the density plots of the congruent and incongruent times:
+
+```{r}
+library(reshape2)
+melted <- melt(data[, c(1,2)])
+ggplot(melted, aes(x=value, fill=variable, colour=variable)) + 
+    geom_density(alpha=0.25) + 
+    scale_fill_discrete(name="Condition") + scale_colour_discrete(name="Condition") +
+    xlab('time') + theme_bw()
+
+```
+
+We notice that the congruent times appear less than those of incongruent ones, although the paired nature of the data isn't reflected here.
+
+So, it appears as though the time taken in the two conditions are different, however we need to carry out a statistical test to verify whether this is significant or not.
+
+# Statistical Test
+
+To carry out our hypothesis test, we first calculate the t statistic:
+
+```{r}
+tscore <- (mean(data$Difference) - 0) / (sd(data$Difference)/ sqrt(n))
+tscore
+```
+
+This is quite a high t score, which suggests that the difference in means may be statistically significant. We can now calculate the p value (the degrees of freedom is n-1):
+
+```{r}
+pval <- 2*pt(-abs(tscore), df=n-1)
+pval
+```
+
+The p value is tiny, and as such we can reject the null hypothesis at very low significance levels. We will take 0.0001 as our significance level, and since the p value is less than that, we can say with 99.9999% confidence that there is a significant difference between the times taken to read the congruent list and the incongruent list.
+
+We can also look at the confidence interval at 99.9999% confidence. To do this, we first calculate the critical value:
+
+```{r}
+criticalValue <- qt(0.0001/2, df=n-1)
+criticalValue
+```
+
+Next, we calulate the margin of error:
+
+```{r}
+me <- abs(criticalValue * se)
+```
+
+And, finally the confidence interval:
+
+```{r}
+0 + c(-1, 1) * me
+```
+
+We can see that the observed mean, `r m` is outside the confidence interval. As such, we can reject the null hypothesis and declare that there is indeed a significant difference between the times taken to read the congruent and incongruent lists. We can also see that the observed mean is less than the lower end of the confidence interval. As such, we can add that there is statistically significant evidence that the time taken to read the incongruent list is greater than the time taken to read the congruent one.
+
+# Discussion
+
+The dataset provides statistical evidence that the time required to read through the congruent list is less than the time required to read through the incongruent one. This is somewhat expected. I imagine this has to do with how our brain processes different types of information. There are two types of information here - colour and the text. In case of the congruent one, our brain starts off reading the text and seeing the colour. Since they are in agreement, we can immediately take any one of the two sources. For the first few words, we might be verifying that the two do indeed agree. But once we see the matching pattern (another thing the brain is good at), we need no further thinking and can almost instantly decide what the word is based on colour - which doesn't need processing. In case of the incongruent list, our brain has to cater to two potentially conflicting sources, and rejecting the one representing colour. It has to do more work to process the text, while ensuring the colour is ignored. This would take additional time, and that is what we see in the data set.
+
+Ironically, when I tried the test, I was presented the congruent list first, and I took longer reading that (16.49s) than the incongruent one (14.989s). However, I did verify things a bit more to get a hang of the test, and finishing the first list, was more confident in what to expect. This could explain my reversed results. When I redid the tests, I found my congruent list time to be considerably lower than the incongruent one. As such, it might be a good idea to do a few iterations for each candidate switching between congruent and oncongruent ones to cater for sequencing issues.
+
+Another similar test to verify the stroop effect could be to put names of shapes inside of shapes. For example, a square could contain the word square for a congruent list and circle for an incongruent list. Just as with colour, I would expect our brains to respond to instantly recognizable constructs like shape that could reinforce, or compete with, the information from the text. I would imagine that experiment would produce similar results.
